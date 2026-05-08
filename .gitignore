@@ -4,3 +4,6 @@ dist/
 vite-dev.log
 vite-dev.err.log
 *.xlsx
+cloudflare-worker/wrangler.toml
+.env
+.env.local

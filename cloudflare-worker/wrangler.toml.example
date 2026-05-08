@@ -1,0 +1,17 @@
+name = "inventory-parts-api"
+main = "src/index.js"
+compatibility_date = "2026-05-09"
+
+# Replace this with your deployed Vercel URL, for example:
+# ALLOWED_ORIGIN = "https://inventory-nine-tan.vercel.app"
+[vars]
+ALLOWED_ORIGIN = "*"
+ADMIN_PASSWORD = "000007"
+
+[[r2_buckets]]
+binding = "CATALOG_BUCKET"
+bucket_name = "inventory-parts-catalog"
+
+[[kv_namespaces]]
+binding = "SAVED_KV"
+id = "replace_with_cloudflare_kv_namespace_id"

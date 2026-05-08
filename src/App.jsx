@@ -17,6 +17,9 @@ const SAVED_STORAGE_KEY = "jcb-parts-saved-v1";
 const CATALOG_OVERRIDE_KEY = "jcb-parts-catalog-override-v1";
 const ADMIN_PASSWORD = "000007";
 const REQUIRED_COLUMNS = ["Material", "Description", "DNP", "RTL", "MRP", "HSN", "GST", "Cat 1", "Cat 2"];
+const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") ?? "";
+
+const apiUrl = (path) => `${API_BASE}${path}`;
 
 const formatPrice = (value) => {
   const number = Number(value);
@@ -138,7 +141,7 @@ export default function App() {
     let active = true;
     const override = localStorage.getItem(CATALOG_OVERRIDE_KEY);
 
-    if (override) {
+    if (!API_BASE && override) {
       try {
         setCatalog(JSON.parse(override));
         setStatus("ready");
@@ -150,7 +153,7 @@ export default function App() {
       }
     }
 
-    fetch("/catalog.json")
+    fetch(API_BASE ? apiUrl("/catalog") : "/catalog.json")
       .then((response) => {
         if (!response.ok) throw new Error("Catalog not found");
         return response.json();
@@ -169,6 +172,27 @@ export default function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!API_BASE) return;
+
+    let active = true;
+
+    fetch(apiUrl("/saved"))
+      .then((response) => {
+        if (!response.ok) throw new Error("Saved list not found");
+        return response.json();
+      })
+      .then((data) => {
+        if (!active) return;
+        setSavedKeys(Array.isArray(data.keys) ? data.keys : []);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [setSavedKeys]);
 
   const savedKeySet = useMemo(() => new Set(savedKeys), [savedKeys]);
   const cartKeys = useMemo(() => new Set(cartItems.map((item) => item.key)), [cartItems]);
@@ -221,9 +245,19 @@ export default function App() {
 
   const toggleSaved = (part) => {
     const key = getMaterialKey(part);
-    setSavedKeys((current) =>
-      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
-    );
+    setSavedKeys((current) => {
+      const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
+
+      if (API_BASE) {
+        fetch(apiUrl("/saved"), {
+          body: JSON.stringify({ keys: next }),
+          headers: { "content-type": "application/json" },
+          method: "PUT",
+        }).catch(() => {});
+      }
+
+      return next;
+    });
   };
 
   const updateCartItem = (key, updates) => {
@@ -236,14 +270,32 @@ export default function App() {
     setCartItems((current) => current.filter((item) => item.key !== key));
   };
 
-  const applyCatalogOverride = (nextCatalog) => {
-    localStorage.setItem(CATALOG_OVERRIDE_KEY, JSON.stringify(nextCatalog));
+  const applyCatalogOverride = async (nextCatalog, password) => {
+    if (API_BASE) {
+      const response = await fetch(apiUrl("/catalog"), {
+        body: JSON.stringify(nextCatalog),
+        headers: {
+          "content-type": "application/json",
+          "x-admin-password": password,
+        },
+        method: "PUT",
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Cloudflare upload failed.");
+      }
+    } else {
+      localStorage.setItem(CATALOG_OVERRIDE_KEY, JSON.stringify(nextCatalog));
+    }
+
     setCatalog(nextCatalog);
     setStatus("ready");
     setQuery("");
   };
 
   const resetCatalog = () => {
+    if (API_BASE) return;
     localStorage.removeItem(CATALOG_OVERRIDE_KEY);
     window.location.reload();
   };
@@ -540,7 +592,7 @@ function AdminPanel({ catalog, isOpen, onClose, onImport, onReset }) {
     setMessage("Importing price list...");
     try {
       const nextCatalog = await parseWorkbook(file);
-      onImport(nextCatalog);
+      await onImport(nextCatalog, password);
       setMessage(`Imported ${nextCatalog.rowCount.toLocaleString("en-IN")} parts.`);
     } catch (error) {
       setMessage(error.message || "Import failed.");
@@ -577,9 +629,11 @@ function AdminPanel({ catalog, isOpen, onClose, onImport, onReset }) {
             <span>{isImporting ? "Importing..." : "Upload Excel price list"}</span>
             <input accept=".xlsx,.xls" disabled={isImporting} onChange={importFile} type="file" />
           </label>
-          <button className="secondary-action" onClick={onReset} type="button">
-            Use deployed catalog
-          </button>
+          {!API_BASE && (
+            <button className="secondary-action" onClick={onReset} type="button">
+              Use deployed catalog
+            </button>
+          )}
           {message && <p className="admin-message">{message}</p>}
         </div>
       )}
