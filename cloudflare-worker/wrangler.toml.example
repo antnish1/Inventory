@@ -5,7 +5,7 @@ compatibility_date = "2026-05-01"
 # Replace this with your deployed Vercel URL, for example:
 # ALLOWED_ORIGIN = "https://inventory-nine-tan.vercel.app"
 [vars]
-ALLOWED_ORIGIN = "*"
+ALLOWED_ORIGIN = "https://inventory-nine-tan.vercel.app,http://localhost:5174,http://127.0.0.1:5174"
 ADMIN_PASSWORD = "000007"
 
 [[r2_buckets]]
