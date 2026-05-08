@@ -1,0 +1,23 @@
+{
+  "name": "price-list",
+  "version": "1.0.0",
+  "description": "Internal JCB parts price-list search app",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "import:catalog": "node scripts/import-catalog.mjs \"May 2026 Dealer Price List.xlsx\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "vite": "^8.0.11",
+    "xlsx": "^0.18.5"
+  }
+}

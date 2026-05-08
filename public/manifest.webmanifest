@@ -1,0 +1,15 @@
+{
+  "name": "JCB Parts Search",
+  "short_name": "JCB Parts",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f3eb",
+  "theme_color": "#f7c948",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
