@@ -125,6 +125,22 @@ const parseWorkbook = async (file) => {
   };
 };
 
+const loadCatalog = async () => {
+  if (API_BASE) {
+    try {
+      const response = await fetch(apiUrl("/catalog"));
+      if (!response.ok) throw new Error("Cloudflare catalog not found");
+      return response.json();
+    } catch (error) {
+      console.warn("Cloudflare catalog failed, using deployed catalog fallback.", error);
+    }
+  }
+
+  const response = await fetch("/catalog.json");
+  if (!response.ok) throw new Error("Catalog not found");
+  return response.json();
+};
+
 export default function App() {
   const [catalog, setCatalog] = useState(null);
   const [cartItems, setCartItems] = useStoredState(CART_STORAGE_KEY, []);
@@ -153,11 +169,7 @@ export default function App() {
       }
     }
 
-    fetch(API_BASE ? apiUrl("/catalog") : "/catalog.json")
-      .then((response) => {
-        if (!response.ok) throw new Error("Catalog not found");
-        return response.json();
-      })
+    loadCatalog()
       .then((data) => {
         if (!active) return;
         setCatalog(data);
