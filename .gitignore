@@ -3,6 +3,8 @@ dist/
 .vercel/
 vite-dev.log
 vite-dev.err.log
+vite-cf-dev.log
+vite-cf-dev.err.log
 *.xlsx
 cloudflare-worker/wrangler.toml
 .env
