@@ -1,6 +1,6 @@
 name = "inventory-parts-api"
 main = "src/index.js"
-compatibility_date = "2026-05-09"
+compatibility_date = "2026-05-01"
 
 # Replace this with your deployed Vercel URL, for example:
 # ALLOWED_ORIGIN = "https://inventory-nine-tan.vercel.app"
