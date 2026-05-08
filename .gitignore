@@ -7,3 +7,4 @@ vite-dev.err.log
 cloudflare-worker/wrangler.toml
 .env
 .env.local
+.wrangler/
