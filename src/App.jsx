@@ -155,8 +155,9 @@ export default function App() {
   const [listTargetPart, setListTargetPart] = useState(null);
   const [orderDiscountPercent, setOrderDiscountPercent] = useState(0);
   const [query, setQuery] = useState("");
-  const [showSavedOnly, setShowSavedOnly] = useState(true);
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
   const [status, setStatus] = useState("loading");
+  const [view, setView] = useState("dashboard");
 
   useEffect(() => {
     let active = true;
@@ -312,6 +313,8 @@ export default function App() {
       .slice(0, 200);
   }, [catalog, query, savedKeySet, showSavedOnly]);
 
+  const isDashboard = status === "ready" && view === "dashboard" && !query.trim();
+
   const addToCart = (part) => {
     const key = getMaterialKey(part);
     if (cartKeys.has(key)) {
@@ -423,7 +426,13 @@ export default function App() {
             autoComplete="off"
             autoFocus
             disabled={status !== "ready"}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (event.target.value.trim()) {
+                setShowSavedOnly(false);
+                setView("results");
+              }
+            }}
             placeholder="Search part number or description"
             type="search"
             value={query}
@@ -431,7 +440,11 @@ export default function App() {
         </label>
         <button
           className={`filter-button${showSavedOnly ? " active" : ""}`}
-          onClick={() => setShowSavedOnly((value) => !value)}
+          onClick={() => {
+            setQuery("");
+            setShowSavedOnly((value) => !value);
+            setView("results");
+          }}
           type="button"
           aria-label={showSavedOnly ? "Show all parts" : "Show saved parts"}
         >
@@ -442,7 +455,29 @@ export default function App() {
       {status === "loading" && <p className="state">Loading price list...</p>}
       {status === "error" && <p className="state error">Catalog data is missing. Run npm run import:catalog.</p>}
 
-      {status === "ready" && (
+      {isDashboard && (
+        <Dashboard
+          cartCount={cartItems.length}
+          catalog={catalog}
+          listCount={lists.length}
+          onBrowseAll={() => {
+            setQuery("");
+            setShowSavedOnly(false);
+            setView("results");
+          }}
+          onOpenCart={() => setIsCartOpen(true)}
+          onOpenLists={() => setIsListsOpen(true)}
+          onOpenSaved={() => {
+            setQuery("");
+            setShowSavedOnly(true);
+            setView("results");
+          }}
+          savedCount={savedKeys.length}
+          totals={totals}
+        />
+      )}
+
+      {status === "ready" && !isDashboard && (
         <section className="catalog-panel" aria-label="Parts catalog">
           <div className="list-status">
             <span>{showSavedOnly ? "Saved items" : "All parts"} · {results.length.toLocaleString("en-IN")} results</span>
@@ -567,6 +602,80 @@ function useStoredState(key, fallback) {
   }, [key, value]);
 
   return [value, setValue];
+}
+
+function Dashboard({
+  cartCount,
+  catalog,
+  listCount,
+  onBrowseAll,
+  onOpenCart,
+  onOpenLists,
+  onOpenSaved,
+  savedCount,
+  totals,
+}) {
+  return (
+    <section className="dashboard" aria-label="Dashboard">
+      <div className="dashboard-hero-card">
+        <div className="dashboard-copy">
+          <span className="eyebrow">Parts command center</span>
+          <h2>Industrial parts lookup built for the yard, counter, and field.</h2>
+          <p>
+            Search the monthly catalog, collect machine-specific lists, and prepare cart pricing with
+            discounts before quoting.
+          </p>
+          <div className="dashboard-actions">
+            <button className="wide-action no-margin" type="button" onClick={onBrowseAll}>
+              Browse parts
+            </button>
+            <button className="secondary-action bright" type="button" onClick={onOpenSaved}>
+              Saved items
+            </button>
+          </div>
+        </div>
+
+        <div className="machine-stage" aria-hidden="true">
+          <div className="machine-card">
+            <div className="boom" />
+            <div className="arm" />
+            <div className="bucket" />
+            <div className="cab" />
+            <div className="body" />
+            <div className="track" />
+            <div className="wheel wheel-left" />
+            <div className="wheel wheel-right" />
+          </div>
+          <div className="part-chip chip-one">Hydraulic kit</div>
+          <div className="part-chip chip-two">Pins</div>
+          <div className="part-chip chip-three">Filters</div>
+        </div>
+      </div>
+
+      <div className="dashboard-grid">
+        <button className="metric-card" type="button" onClick={onBrowseAll}>
+          <span>Total catalog</span>
+          <strong>{(catalog?.rowCount ?? 0).toLocaleString("en-IN")}</strong>
+          <small>{catalog?.sourceFile || "Price list"}</small>
+        </button>
+        <button className="metric-card red" type="button" onClick={onOpenSaved}>
+          <span>Saved items</span>
+          <strong>{savedCount.toLocaleString("en-IN")}</strong>
+          <small>Quick access shelf</small>
+        </button>
+        <button className="metric-card blue" type="button" onClick={onOpenLists}>
+          <span>Named lists</span>
+          <strong>{listCount.toLocaleString("en-IN")}</strong>
+          <small>Jobs, machines, customers</small>
+        </button>
+        <button className="metric-card green" type="button" onClick={onOpenCart}>
+          <span>Cart value</span>
+          <strong>{formatPrice(totals.grandTotal)}</strong>
+          <small>{cartCount.toLocaleString("en-IN")} items selected</small>
+        </button>
+      </div>
+    </section>
+  );
 }
 
 function CartPanel({
