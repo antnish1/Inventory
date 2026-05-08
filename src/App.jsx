@@ -1,8 +1,9 @@
-import {
+﻿import {
   Check,
+  FolderPlus,
   Heart,
-  Info,
   KeyRound,
+  Layers3,
   Search,
   ShoppingCart,
   Trash2,
@@ -14,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 
 const CART_STORAGE_KEY = "jcb-parts-cart-v1";
 const SAVED_STORAGE_KEY = "jcb-parts-saved-v1";
+const LISTS_STORAGE_KEY = "jcb-parts-lists-v1";
 const CATALOG_OVERRIDE_KEY = "jcb-parts-catalog-override-v1";
 const ADMIN_PASSWORD = "000007";
 const REQUIRED_COLUMNS = ["Material", "Description", "DNP", "RTL", "MRP", "HSN", "GST", "Cat 1", "Cat 2"];
@@ -144,13 +146,16 @@ const loadCatalog = async () => {
 export default function App() {
   const [catalog, setCatalog] = useState(null);
   const [cartItems, setCartItems] = useStoredState(CART_STORAGE_KEY, []);
+  const [lists, setLists] = useStoredState(LISTS_STORAGE_KEY, []);
   const [savedKeys, setSavedKeys] = useStoredState(SAVED_STORAGE_KEY, []);
   const [activePart, setActivePart] = useState(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isListsOpen, setIsListsOpen] = useState(false);
+  const [listTargetPart, setListTargetPart] = useState(null);
   const [orderDiscountPercent, setOrderDiscountPercent] = useState(0);
   const [query, setQuery] = useState("");
-  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [showSavedOnly, setShowSavedOnly] = useState(true);
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
@@ -190,21 +195,97 @@ export default function App() {
 
     let active = true;
 
-    fetch(apiUrl("/saved"))
-      .then((response) => {
+    Promise.all([
+      fetch(apiUrl("/saved")).then((response) => {
         if (!response.ok) throw new Error("Saved list not found");
         return response.json();
-      })
-      .then((data) => {
+      }),
+      fetch(apiUrl("/lists")).then((response) => {
+        if (!response.ok) throw new Error("Named lists not found");
+        return response.json();
+      }),
+    ])
+      .then(([savedData, listsData]) => {
         if (!active) return;
-        setSavedKeys(Array.isArray(data.keys) ? data.keys : []);
+        setSavedKeys(Array.isArray(savedData.keys) ? savedData.keys : []);
+        setLists(Array.isArray(listsData.lists) ? listsData.lists : []);
       })
       .catch(() => {});
 
     return () => {
       active = false;
     };
-  }, [setSavedKeys]);
+  }, [setLists, setSavedKeys]);
+
+  const persistSavedKeys = (keys) => {
+    if (!API_BASE) return;
+
+    fetch(apiUrl("/saved"), {
+      body: JSON.stringify({ keys }),
+      headers: { "content-type": "application/json" },
+      method: "PUT",
+    }).catch(() => {});
+  };
+
+  const persistLists = (nextLists) => {
+    if (!API_BASE) return;
+
+    fetch(apiUrl("/lists"), {
+      body: JSON.stringify({ lists: nextLists }),
+      headers: { "content-type": "application/json" },
+      method: "PUT",
+    }).catch(() => {});
+  };
+
+  const clearSaved = () => {
+    setSavedKeys([]);
+    persistSavedKeys([]);
+  };
+
+  const clearCart = () => {
+    setCartItems([]);
+  };
+
+  const createList = (name) => {
+    const cleanName = name.trim();
+    if (!cleanName) return "List name is required.";
+
+    const exists = lists.some((list) => list.name.toLowerCase() === cleanName.toLowerCase());
+    if (exists) return "A list with this name already exists.";
+
+    const nextLists = [...lists, { name: cleanName, keys: [] }];
+    setLists(nextLists);
+    persistLists(nextLists);
+    return "";
+  };
+
+  const deleteList = (name) => {
+    const nextLists = lists.filter((list) => list.name !== name);
+    setLists(nextLists);
+    persistLists(nextLists);
+  };
+
+  const togglePartInList = (name, part) => {
+    const key = getMaterialKey(part);
+    const nextLists = lists.map((list) => {
+      if (list.name !== name) return list;
+      return {
+        ...list,
+        keys: list.keys.includes(key)
+          ? list.keys.filter((item) => item !== key)
+          : [...list.keys, key],
+      };
+    });
+
+    setLists(nextLists);
+    persistLists(nextLists);
+  };
+
+  const clearList = (name) => {
+    const nextLists = lists.map((list) => (list.name === name ? { ...list, keys: [] } : list));
+    setLists(nextLists);
+    persistLists(nextLists);
+  };
 
   const savedKeySet = useMemo(() => new Set(savedKeys), [savedKeys]);
   const cartKeys = useMemo(() => new Set(cartItems.map((item) => item.key)), [cartItems]);
@@ -261,11 +342,7 @@ export default function App() {
       const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
 
       if (API_BASE) {
-        fetch(apiUrl("/saved"), {
-          body: JSON.stringify({ keys: next }),
-          headers: { "content-type": "application/json" },
-          method: "PUT",
-        }).catch(() => {});
+        persistSavedKeys(next);
       }
 
       return next;
@@ -326,6 +403,9 @@ export default function App() {
         </div>
 
         <div className="hero-actions">
+          <button className="chip-button" type="button" onClick={() => setIsListsOpen(true)} aria-label="Open lists">
+            <Layers3 size={18} />
+          </button>
           <button className="chip-button" type="button" onClick={() => setIsAdminOpen(true)} aria-label="Admin upload">
             <Upload size={18} />
           </button>
@@ -353,7 +433,7 @@ export default function App() {
           className={`filter-button${showSavedOnly ? " active" : ""}`}
           onClick={() => setShowSavedOnly((value) => !value)}
           type="button"
-          aria-label="Show saved parts"
+          aria-label={showSavedOnly ? "Show all parts" : "Show saved parts"}
         >
           <Heart size={18} fill={showSavedOnly ? "currentColor" : "none"} />
         </button>
@@ -365,11 +445,26 @@ export default function App() {
       {status === "ready" && (
         <section className="catalog-panel" aria-label="Parts catalog">
           <div className="list-status">
-            <span>{results.length.toLocaleString("en-IN")} results</span>
+            <span>{showSavedOnly ? "Saved items" : "All parts"} · {results.length.toLocaleString("en-IN")} results</span>
             <span>{catalog?.sourceFile}</span>
           </div>
 
+          {showSavedOnly && savedKeys.length > 0 && (
+            <div className="panel-tools">
+              <button className="secondary-action compact" type="button" onClick={clearSaved}>
+                Clear saved
+              </button>
+            </div>
+          )}
+
           <div className="product-list">
+            {results.length === 0 && (
+              <div className="empty-list">
+                <Heart size={30} />
+                <h3>{showSavedOnly ? "No saved items yet" : "No parts found"}</h3>
+                <p>{showSavedOnly ? "Tap the heart on any part to save it here." : "Try another part number or description."}</p>
+              </div>
+            )}
             {results.map((part) => {
               const key = getMaterialKey(part);
               const saved = savedKeySet.has(key);
@@ -383,7 +478,6 @@ export default function App() {
                   </button>
 
                   <div className="row-price">
-                    <span>MRP</span>
                     <strong>{formatPrice(part.mrp)}</strong>
                   </div>
 
@@ -404,8 +498,16 @@ export default function App() {
                     >
                       {inCart ? <Check size={18} /> : <ShoppingCart size={18} />}
                     </button>
-                    <button className="icon-button" type="button" onClick={() => setActivePart(part)} aria-label="Details">
-                      <Info size={18} />
+                    <button
+                      className="icon-button list"
+                      type="button"
+                      onClick={() => {
+                        setListTargetPart(part);
+                        setIsListsOpen(true);
+                      }}
+                      aria-label="Add to list"
+                    >
+                      <FolderPlus size={18} />
                     </button>
                   </div>
                 </article>
@@ -424,6 +526,20 @@ export default function App() {
         onUpdate={updateCartItem}
         orderDiscountPercent={orderDiscountPercent}
         totals={totals}
+        onClearCart={clearCart}
+      />
+      <ListsPanel
+        isOpen={isListsOpen}
+        lists={lists}
+        onClearList={clearList}
+        onClose={() => {
+          setIsListsOpen(false);
+          setListTargetPart(null);
+        }}
+        onCreateList={createList}
+        onDeleteList={deleteList}
+        onTogglePart={togglePartInList}
+        targetPart={listTargetPart}
       />
       <DetailsPanel part={activePart} onAddToCart={addToCart} onClose={() => setActivePart(null)} />
       <AdminPanel
@@ -456,6 +572,7 @@ function useStoredState(key, fallback) {
 function CartPanel({
   cartItems,
   isOpen,
+  onClearCart,
   onClose,
   onOrderDiscountChange,
   onRemove,
@@ -465,6 +582,13 @@ function CartPanel({
 }) {
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="Cart" subtitle={`${cartItems.length.toLocaleString("en-IN")} parts`}>
+      {cartItems.length > 0 && (
+        <div className="panel-tools in-drawer">
+          <button className="secondary-action compact danger-text" type="button" onClick={onClearCart}>
+            Clear cart
+          </button>
+        </div>
+      )}
       <div className="cart-lines">
         {!cartItems.length && (
           <div className="empty-cart">
@@ -553,6 +677,96 @@ function CartPanel({
         <div className="grand-total">
           <span>Final price</span>
           <strong>{formatPrice(totals.grandTotal)}</strong>
+        </div>
+      </div>
+    </Drawer>
+  );
+}
+
+function ListsPanel({
+  isOpen,
+  lists,
+  onClearList,
+  onClose,
+  onCreateList,
+  onDeleteList,
+  onTogglePart,
+  targetPart,
+}) {
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
+
+  const submit = (event) => {
+    event.preventDefault();
+    const error = onCreateList(name);
+    setMessage(error || "List created.");
+    if (!error) setName("");
+  };
+
+  return (
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Item lists"
+      subtitle={targetPart ? `Add ${targetPart.material || "part"}` : `${lists.length} lists`}
+    >
+      <div className="lists-body">
+        <form className="list-create" onSubmit={submit}>
+          <label>
+            New list name
+            <input
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Example: Backhoe service"
+              type="text"
+              value={name}
+            />
+          </label>
+          <button className="wide-action no-margin" type="submit">
+            Create list
+          </button>
+          {message && <p className="admin-message">{message}</p>}
+        </form>
+
+        <div className="named-lists">
+          {!lists.length && (
+            <div className="empty-cart compact-empty">
+              <Layers3 size={30} />
+              <h3>No lists yet</h3>
+              <p>Create named lists for jobs, machines, or customers.</p>
+            </div>
+          )}
+
+          {lists.map((list) => {
+            const hasTarget = Boolean(targetPart && list.keys.includes(getMaterialKey(targetPart)));
+
+            return (
+              <article className="named-list" key={list.name}>
+                <div>
+                  <strong>{list.name}</strong>
+                  <p>{list.keys.length.toLocaleString("en-IN")} items</p>
+                </div>
+                <div className="list-actions">
+                  {targetPart && (
+                    <button
+                      className={`secondary-action compact${hasTarget ? " selected-list" : ""}`}
+                      onClick={() => onTogglePart(list.name, targetPart)}
+                      type="button"
+                    >
+                      {hasTarget ? "Remove" : "Add"}
+                    </button>
+                  )}
+                  {list.keys.length > 0 && (
+                    <button className="icon-button danger" onClick={() => onClearList(list.name)} type="button" aria-label="Clear list">
+                      <Trash2 size={17} />
+                    </button>
+                  )}
+                  <button className="icon-button danger" onClick={() => onDeleteList(list.name)} type="button" aria-label="Delete list">
+                    <X size={17} />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
     </Drawer>
@@ -695,3 +909,4 @@ function SummaryRow({ label, value }) {
     </div>
   );
 }
+

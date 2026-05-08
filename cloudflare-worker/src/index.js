@@ -1,5 +1,6 @@
 const CATALOG_KEY = "catalog.json";
 const SAVED_KEY = "shared-saved-list";
+const LISTS_KEY = "shared-named-lists";
 
 const getAllowedOrigin = (request, env) => {
   const origin = request.headers.get("origin") || "";
@@ -120,6 +121,43 @@ export default {
 
       await env.SAVED_KV.put(SAVED_KEY, JSON.stringify(keys));
       return json({ ok: true, keys }, {}, request, env);
+    }
+
+    if (url.pathname === "/lists" && request.method === "GET") {
+      const lists = (await env.SAVED_KV.get(LISTS_KEY, "json")) || [];
+      return json({ lists: Array.isArray(lists) ? lists : [] }, {}, request, env);
+    }
+
+    if (url.pathname === "/lists" && request.method === "PUT") {
+      let payload;
+
+      try {
+        payload = await request.json();
+      } catch {
+        return json({ error: "Invalid lists JSON." }, { status: 400 }, request, env);
+      }
+
+      const names = new Set();
+      const lists = Array.isArray(payload.lists)
+        ? payload.lists
+            .filter((list) => list && typeof list.name === "string")
+            .map((list) => ({
+              name: list.name.trim().slice(0, 80),
+              keys: Array.isArray(list.keys)
+                ? [...new Set(list.keys.filter((key) => typeof key === "string"))].slice(0, 5000)
+                : [],
+            }))
+            .filter((list) => {
+              const normalized = list.name.toLowerCase();
+              if (!list.name || names.has(normalized)) return false;
+              names.add(normalized);
+              return true;
+            })
+            .slice(0, 100)
+        : [];
+
+      await env.SAVED_KV.put(LISTS_KEY, JSON.stringify(lists));
+      return json({ ok: true, lists }, {}, request, env);
     }
 
     return json({ error: "Not found." }, { status: 404 }, request, env);
